@@ -738,46 +738,68 @@ document.querySelectorAll('.rev').forEach(el=>ro.observe(el));
 <script>
 // ── PWA INSTALL ──
 let _deferredPrompt = null;
-const _banner  = document.getElementById('pwa-banner');
-const _instBtn = document.getElementById('pwa-install-btn');
-const _disBtn  = document.getElementById('pwa-dismiss-btn');
 
-window.addEventListener('beforeinstallprompt', e => {
-  e.preventDefault();
-  _deferredPrompt = e;
-  // Show banner after 4 seconds
-  setTimeout(() => {
-    if(_banner && !localStorage.getItem('pwa_dismissed'))
-      _banner.classList.add('show');
-  }, 4000);
-});
+// Wait for full DOM before grabbing elements
+window.addEventListener('DOMContentLoaded', () => {
+  const banner  = document.getElementById('pwa-banner');
+  const instBtn = document.getElementById('pwa-install-btn');
+  const disBtn  = document.getElementById('pwa-dismiss-btn');
 
-_instBtn && _instBtn.addEventListener('click', async () => {
-  if(!_deferredPrompt) return;
-  _banner.classList.remove('show');
-  _deferredPrompt.prompt();
-  const { outcome } = await _deferredPrompt.userChoice;
-  _deferredPrompt = null;
-  if(outcome === 'accepted') console.log('PWA installed!');
-});
+  // Capture install prompt event
+  window.addEventListener('beforeinstallprompt', e => {
+    e.preventDefault();
+    _deferredPrompt = e;
+    console.log('Install prompt ready');
+    // Show banner after 3 seconds if not dismissed before
+    setTimeout(() => {
+      if(banner && !sessionStorage.getItem('pwa_dismissed')) {
+        banner.classList.add('show');
+      }
+    }, 3000);
+  });
 
-_disBtn && _disBtn.addEventListener('click', () => {
-  _banner.classList.remove('show');
-  localStorage.setItem('pwa_dismissed', '1');
-});
+  // Install button — must call prompt() directly in click handler (synchronous)
+  if(instBtn) {
+    instBtn.addEventListener('click', function() {
+      if(!_deferredPrompt) {
+        // Fallback: show Chrome's native Add to Home Screen via browser menu
+        alert('To install: tap the Chrome menu (⋮) → "Add to Home screen"');
+        return;
+      }
+      // Hide our banner first
+      if(banner) banner.classList.remove('show');
+      // Show native Chrome install dialog — must be called directly in click
+      _deferredPrompt.prompt();
+      // Wait for user choice
+      _deferredPrompt.userChoice.then(choice => {
+        console.log('User choice:', choice.outcome);
+        _deferredPrompt = null;
+      });
+    });
+  }
 
-window.addEventListener('appinstalled', () => {
-  _banner && _banner.classList.remove('show');
-  _deferredPrompt = null;
-  console.log('Biryanivale app installed!');
+  // Dismiss button
+  if(disBtn) {
+    disBtn.addEventListener('click', () => {
+      if(banner) banner.classList.remove('show');
+      sessionStorage.setItem('pwa_dismissed', '1');
+    });
+  }
+
+  // Hide banner after successful install
+  window.addEventListener('appinstalled', () => {
+    if(banner) banner.classList.remove('show');
+    _deferredPrompt = null;
+    console.log('Biryanivale installed as app!');
+  });
 });
 
 // ── SERVICE WORKER ──
 if('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('./sw.js')
-      .then(reg => console.log('SW registered, scope:', reg.scope))
-      .catch(err => console.log('SW error:', err));
+      .then(reg => console.log('SW registered:', reg.scope))
+      .catch(err => console.warn('SW failed:', err));
   });
 }
 </script>
